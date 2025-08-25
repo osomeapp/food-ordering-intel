@@ -49,7 +49,7 @@ class MCPClient {
       }
 
       const data = await response.json();
-      return JSON.parse(data.content[0].text);
+      return data;
     } catch (error) {
       console.error(`Error calling MCP tool ${toolName}:`, error);
       throw error;

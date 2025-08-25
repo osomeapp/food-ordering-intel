@@ -5,14 +5,22 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "start": "node http-server.js",
+    "start:mcp": "node server.js",
+    "dev": "node --watch http-server.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
     "ws": "^8.18.0"
   },
-  "keywords": ["mcp", "menu", "food-ordering", "ai"],
+  "keywords": [
+    "mcp",
+    "menu",
+    "food-ordering",
+    "ai"
+  ],
   "author": "AI Food Ordering App",
   "license": "MIT"
 }

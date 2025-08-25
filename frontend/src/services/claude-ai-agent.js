@@ -46,6 +46,12 @@ class ClaudeAIAgent {
   }
 
   async processUserIntent(userInput, currentContext = {}) {
+    console.log('🤖 === AI AGENT PROCESSING USER INPUT ===');
+    console.log('🤖 User Input:', userInput);
+    console.log('🤖 Current Context:', currentContext);
+    console.log('🤖 Menu Items Count:', currentContext.menuItems?.length || 0);
+    console.log('🤖 useClaudeAPI:', this.useClaudeAPI);
+    
     console.log('🤖 AI Agent Processing:', {
       userInput,
       useClaudeAPI: this.useClaudeAPI,
@@ -135,10 +141,25 @@ class ClaudeAIAgent {
 
     // Include menu data in the prompt for intelligent recommendations
     const menuData = currentContext.menuItems || [];
+    console.log('🤖 SYSTEM PROMPT - Menu data received:', menuData.length, 'items');
+    console.log('🤖 SYSTEM PROMPT - Current context:', currentContext);
+    
+    // Group menu by categories for better understanding
+    const menuByCategory = menuData.reduce((acc, item) => {
+      if (!acc[item.category]) acc[item.category] = [];
+      acc[item.category].push(item);
+      return acc;
+    }, {});
+    
     const menuSummary = menuData.length > 0 ? 
-      menuData.slice(0, 20).map(item => `- ${item.name}: $${item.price} - ${item.description} (${item.dietary?.join(', ') || 'no dietary info'}) [Calories: ${item.calories || 'N/A'}, Spice: ${item.spicyLevel || 0}/4]`).join('\n') +
-      (menuData.length > 20 ? `\n... and ${menuData.length - 20} more items available` : '')
+      Object.entries(menuByCategory).map(([category, items]) => 
+        `${category.toUpperCase()} (${items.length} items):\n` +
+        items.slice(0, 5).map(item => `- ${item.name} (${item.id}): $${item.price} - ${item.description} [${item.calories || 'N/A'} cal, Spice: ${item.spicyLevel || 0}/4, Dietary: ${item.dietary?.join(', ') || 'none'}]`).join('\n') +
+        (items.length > 5 ? `\n... and ${items.length - 5} more ${category} items` : '')
+      ).join('\n\n')
       : 'Menu not loaded yet';
+    
+    const categories = Object.keys(menuByCategory);
 
     return `You are an AI assistant for a food ordering app. You help users browse menus, make recommendations, and manage their cart through natural conversation.
 
@@ -149,13 +170,19 @@ CURRENT CONTEXT:
 - Cart items: ${currentContext.cartCount || 0}
 - Cart total: $${currentContext.cartTotal || '0.00'}
 - Available menu items: ${menuData.length}
+- Available categories: ${categories.join(', ')}
 - Previous preferences: ${Array.from(this.userPreferences.entries()).map(([k,v]) => `${k}: ${v}`).join(', ') || 'None'}
 
-MENU SAMPLE (first 20 items):
+COMPLETE MENU BY CATEGORY:
 ${menuSummary}
 
-RESPONSE FORMAT:
-You must respond with a JSON object containing:
+CRITICAL RULES:
+1. ONLY recommend items that exist in the menu above - NEVER make up items like "Lemon Sorbet", "Yogurt Parfait" etc.
+2. When asked for a specific category (e.g., "desserts"), ONLY search within that category
+3. Use the exact item names and IDs from the menu
+4. For "not too sweet" desserts, recommend Fruit Tart (280 cal) or Key Lime Pie (350 cal) which are actually available
+
+RESPONSE FORMAT - ALWAYS RESPOND WITH VALID JSON:
 {
   "action": "tool_call" | "conversation" | "clarification",
   "tool": "tool_name" (if action is "tool_call"),
@@ -164,6 +191,13 @@ You must respond with a JSON object containing:
   "suggestions": ["suggestion1", "suggestion2"] (optional),
   "ui_type": "menu_display" | "cart_update" | "show_cart" | "conversation" | "error"
 }
+
+FOR CATEGORY REQUESTS:
+- "desserts", "dessert pls", "show desserts" → {"action": "tool_call", "tool": "menu_get_items", "parameters": {"category": "Desserts"}, "message": "Here are our dessert options!", "ui_type": "menu_display"}
+- "appetizers", "starters" → {"action": "tool_call", "tool": "menu_get_items", "parameters": {"category": "Appetizers"}, "message": "Here are our appetizers!", "ui_type": "menu_display"}
+- "mains", "entrees" → {"action": "tool_call", "tool": "menu_get_items", "parameters": {"category": "Mains"}, "message": "Here are our main courses!", "ui_type": "menu_display"}
+
+NEVER respond with plain text - ALWAYS use JSON format.
 
 IMPORTANT RULES:
 1. Always be conversational and friendly
@@ -177,15 +211,15 @@ IMPORTANT RULES:
 
 Examples:
 - "Show me vegetarian options" → Use menu_get_items with dietary filter
-- "Healthy options and no cheese" → Use menu_search with "healthy" and exclude items containing cheese
-- "Add 2 burgers" → First use menu_search to find burgers, then use cart_add_item with the exact itemId from search results
-- "Add grilled chicken salad" → First search for "grilled chicken salad" to get the itemId, then cart_add_item with {itemId: "healthy002", quantity: 1}
-- "What goes with pasta?" → Use menu_get_recommendations with preferences
-- "I'm hungry for something spicy" → Use menu_get_items with spicy filter
-- "Remove the pizza" → Use cart_remove_item after identifying pizza in cart
-- "Something without dairy" → Use menu_search to find items without dairy ingredients
-- "What do you suggest for old people with diabetes?" → Analyze menu for low-sugar, heart-healthy options with lower calories
-- "Recommend something for a vegetarian who likes spicy food" → Filter for vegetarian items with high spice levels
+- "I want desserts that is not too sweet" → Use menu_get_items with category="Desserts", then recommend Fruit Tart or Key Lime Pie from actual menu
+- "Add 2 burgers" → First use menu_search to find "Beef Burger" (main008), then cart_add_item with itemId: "main008"
+- "Add grilled chicken salad" → Search for "Caesar Salad with Chicken" (main010), then cart_add_item with itemId: "main010"
+- "What goes with pasta?" → Recommend actual items like "Shrimp Scampi" (main025) which has pasta
+- "I'm hungry for something spicy" → Use menu_get_items with spicyLevel >= 2
+- "Remove the pizza" → Use cart_remove_item for "Margherita Pizza" (main007)
+- "Something without dairy" → Search for vegan items from actual menu
+- "What do you suggest for old people with diabetes?" → Recommend low-calorie items like "Vegetable Stir Fry" (340 cal) or "Quinoa Bowl" (380 cal)
+- "Show me appetizers" → Use menu_get_items with category="Appetizers"
 
 IMPORTANT: When adding items to cart:
 1. You MUST first search for the item using menu_search to get the exact itemId
@@ -210,17 +244,48 @@ DIETARY GUIDELINES:
 
   async parseAndExecuteClaudeResponse(claudeResponse, userInput, currentContext) {
     try {
-      // Try to parse JSON response
+      // Parse JSON response with fallback to manual extraction
       let parsedResponse;
       try {
         parsedResponse = JSON.parse(claudeResponse);
       } catch (e) {
-        // If not JSON, treat as conversational response
-        parsedResponse = {
-          action: 'conversation',
-          message: claudeResponse,
-          ui_type: 'conversation'
-        };
+        // Extract suggestions manually from the response
+        const suggestionsMatch = claudeResponse.match(/"suggestions":\s*\[(.*?)\]/s);
+        const toolMatch = claudeResponse.match(/"tool":\s*"(.*?)"/);
+        
+        if (suggestionsMatch) {
+          try {
+            const suggestionsArray = JSON.parse('[' + suggestionsMatch[1] + ']');
+            const tool = toolMatch ? toolMatch[1] : 'menu_get_items';
+            
+            // Determine parameters based on context
+            let parameters = {};
+            if (suggestionsArray.some(s => s.toLowerCase().includes('dessert') || s.includes('tart') || s.includes('pie'))) {
+              parameters = { category: 'Desserts' };
+            }
+            
+            parsedResponse = {
+              action: 'tool_call',
+              tool: tool,
+              parameters: parameters,
+              message: 'Here are some options for you:',
+              suggestions: suggestionsArray,
+              ui_type: 'menu_display'
+            };
+          } catch (e2) {
+            parsedResponse = {
+              action: 'conversation',
+              message: claudeResponse,
+              ui_type: 'conversation'
+            };
+          }
+        } else {
+          parsedResponse = {
+            action: 'conversation',
+            message: claudeResponse,
+            ui_type: 'conversation'
+          };
+        }
       }
 
       const response = {
@@ -231,7 +296,6 @@ DIETARY GUIDELINES:
 
       // Execute tool calls if specified
       if (parsedResponse.action === 'tool_call' && parsedResponse.tool) {
-        console.log('🤖 Claude calling tool:', parsedResponse.tool, 'with parameters:', parsedResponse.parameters);
         
         // Special handling for cart_add_item - ensure we have a valid itemId
         if (parsedResponse.tool === 'cart_add_item' && parsedResponse.parameters) {
@@ -269,6 +333,9 @@ DIETARY GUIDELINES:
             response.type = 'menu_display';
             response.items = toolResult.items || toolResult.results || toolResult.recommendations || [];
             response.displayStyle = 'grid';
+            // Preserve suggestions from Claude's response
+            response.suggestions = parsedResponse.suggestions;
+            console.log('🔧 PRESERVING suggestions:', response.suggestions);
             break;
             
           case 'cart_add_item':

@@ -80,10 +80,35 @@ const useAIMenu = () => {
       const response = await aiAgent.processUserIntent(userInput, currentContext);
       setAiResponse(response);
 
+
       // Update UI based on response type
       switch (response.type) {
         case 'menu_display':
-          setMenuItems(response.items || []);
+          // If menu_display has suggestions, filter by suggestions instead of showing all items
+          if (response.suggestions && response.suggestions.length > 0) {
+            console.log('🔧 FILTERING - Suggestions:', response.suggestions);
+            const itemsToFilter = response.items || menuItems;
+            console.log('🔧 FILTERING - Items to filter from:', itemsToFilter.length);
+            
+            const filteredItems = itemsToFilter.filter(item => {
+              return response.suggestions.some(suggestion => {
+                // Extract item name from suggestion (remove calorie info)
+                const cleanSuggestion = suggestion.replace(/\s*\(\d+.*?\)/, '').trim();
+                const match = item.name.toLowerCase().includes(cleanSuggestion.toLowerCase()) ||
+                             cleanSuggestion.toLowerCase().includes(item.name.toLowerCase()) ||
+                             item.name.toLowerCase() === cleanSuggestion.toLowerCase();
+                if (match) {
+                  console.log('🔧 MATCH FOUND:', item.name, '<=>', cleanSuggestion);
+                }
+                return match;
+              });
+            });
+            
+            console.log('🔧 FILTERING - Filtered items:', filteredItems.length, filteredItems.map(i => i.name));
+            setMenuItems(filteredItems);
+          } else {
+            setMenuItems(response.items || []);
+          }
           break;
         
         case 'cart_update':
@@ -93,6 +118,22 @@ const useAIMenu = () => {
         
         case 'clarification_needed':
           setMenuItems(response.items || []);
+          break;
+        
+        case 'conversation':
+          // If conversation has suggestions, filter menu items to show only suggested items
+          if (response.suggestions && response.suggestions.length > 0) {
+            const filteredItems = menuItems.filter(item => {
+              return response.suggestions.some(suggestion => {
+                // Extract item name from suggestion (remove calorie info)
+                const cleanSuggestion = suggestion.replace(/\s*\(\d+.*?\)/, '').trim();
+                return item.name.toLowerCase().includes(cleanSuggestion.toLowerCase()) ||
+                       cleanSuggestion.toLowerCase().includes(item.name.toLowerCase()) ||
+                       item.name.toLowerCase() === cleanSuggestion.toLowerCase();
+              });
+            });
+            setMenuItems(filteredItems);
+          }
           break;
         
         default:

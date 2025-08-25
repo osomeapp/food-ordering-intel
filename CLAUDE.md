@@ -12,12 +12,14 @@ This is an AI-powered food ordering application that demonstrates revolutionary 
 
 ### Starting the Application (Two Servers Required)
 ```bash
-# Terminal 1: Start MCP Menu Server
+# Terminal 1: Start MCP Menu Server (HTTP mode for frontend)
 cd mcp-menu-server && npm start
 
 # Terminal 2: Start React Frontend  
 cd frontend && npm start
 ```
+
+**Important**: The MCP server runs in HTTP mode (`npm start` → `http-server.js`) for frontend communication. The original MCP stdio server (`npm run start:mcp` → `server.js`) is for direct CLI usage only.
 
 ### Development Commands
 ```bash
@@ -30,8 +32,23 @@ npm test -- --watch        # Run tests in watch mode
 
 # MCP Server development  
 cd mcp-menu-server
-npm start                   # Start MCP server
-npm run dev                 # Start with file watching
+npm start                   # HTTP server on port 3001 (for frontend)
+npm run start:mcp           # Original MCP stdio server (for CLI)
+npm run dev                 # HTTP server with file watching
+```
+
+### Testing API Endpoints
+```bash
+# Test MCP server health
+curl http://localhost:3001/health
+
+# List available tools
+curl http://localhost:3001/api/mcp/tools
+
+# Test menu items call
+curl -X POST http://localhost:3001/api/mcp/call \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "menu_get_items", "arguments": {"category": "Desserts"}}'
 ```
 
 ### Package Management
@@ -158,3 +175,47 @@ Advanced natural language processing:
 - `REACT_APP_DEBUG_AI=true` shows Claude's reasoning in browser console
 - `REACT_APP_AI_FALLBACK_MODE=true` enables graceful degradation
 - MCP server runs independently and can be tested with direct tool calls
+
+## Common Development Issues & Solutions
+
+### MCP Server Connection Issues
+- **Error**: `GET http://localhost:3001/api/mcp/tools 404 (Not Found)`
+- **Solution**: Ensure you're running `npm start` (not `npm run start:mcp`) to start the HTTP server
+
+### Claude JSON Parsing Issues
+- **Error**: `JSON parsing failed` in console
+- **Solution**: The app has robust fallback parsing that extracts suggestions even from malformed JSON responses
+- **Debug**: Use `REACT_APP_DEBUG_AI=true` to see detailed parsing logs
+
+### Filtering Not Working with Suggestions
+- **Issue**: Claude provides suggestions but UI shows all items instead of filtered ones
+- **Solution**: Check that `response.suggestions` is properly preserved through tool calls in `claude-ai-agent.js`
+- **Debug**: Look for `🔧 FILTERING` logs in browser console
+
+### Port Conflicts
+- **Frontend**: Runs on port 3000 (React default)
+- **MCP Server**: Runs on port 3001 (configurable via PORT env var)
+- **Solution**: Kill existing processes with `lsof -ti :PORT | xargs kill -9`
+
+## Debugging Suggestions Feature
+
+When working on the suggestions filtering system:
+
+1. **Check Response Structure**: Ensure suggestions are preserved in tool call responses
+2. **Verify Filtering Logic**: Look for exact vs. partial name matching in `useAIMenu.js`
+3. **Calorie Info Handling**: Suggestions may include calorie data `"Item Name (XXX cal)"` that needs stripping
+4. **UI Type Handling**: Both `menu_display` and `conversation` response types can contain suggestions
+
+## Architecture Notes
+
+### HTTP vs. MCP Protocol
+The app uses a dual-server approach:
+- `http-server.js`: Express HTTP wrapper for frontend communication
+- `server.js`: Original MCP stdio server for direct protocol usage
+
+### AI Response Processing Pipeline
+1. **User Input** → `useAIMenu.processMessage()`
+2. **Claude Processing** → `claude-ai-agent.js` (JSON parsing with fallbacks)
+3. **Tool Execution** → MCP server via HTTP calls
+4. **Response Enhancement** → Suggestions preservation and UI type determination
+5. **UI Updates** → Dynamic filtering and component rendering
