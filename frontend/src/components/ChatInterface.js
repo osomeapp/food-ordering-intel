@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const ChatInterface = ({ onUserMessage, aiResponse, isLoading, aiAgent }) => {
+const ChatInterface = ({ onUserMessage, aiResponse, isLoading, aiAgent, menuItems = [] }) => {
   const [input, setInput] = useState('');
   const [chatHistory, setChatHistory] = useState([
     {
@@ -83,28 +83,73 @@ const ChatInterface = ({ onUserMessage, aiResponse, isLoading, aiAgent }) => {
     ));
   };
 
+  // Helper function to get menu item details from suggestion - only return if item exists
+  const getItemFromSuggestion = (suggestion) => {
+    if (typeof suggestion === 'object') return suggestion;
+    
+    // Extract item ID from suggestion like "Grilled Salmon (main024)"
+    const idMatch = suggestion.match(/\(([^)]+)\)$/);
+    if (idMatch) {
+      const itemId = idMatch[1];
+      const menuItem = menuItems.find(item => item.id === itemId);
+      if (menuItem) {
+        return menuItem;
+      }
+    }
+    
+    // Clean the suggestion (remove prices, IDs, and extra info) - same logic as validation
+    let cleanName = suggestion.replace(/\s*\([^)]*\)/, ''); // Remove (parentheses)
+    cleanName = cleanName.replace(/\s*-\s*\$[\d.]+/, ''); // Remove - $price
+    cleanName = cleanName.replace(/\s*\$[\d.]+/, ''); // Remove $price
+    cleanName = cleanName.trim();
+    
+    const menuItem = menuItems.find(item => 
+      item.name.toLowerCase() === cleanName.toLowerCase()
+    );
+    
+    // Only return the menu item if it actually exists - don't create fake items
+    return menuItem;
+  };
+
   const renderAIResponseData = (data) => {
     if (!data || !data.type) return null;
 
     switch (data.type) {
       case 'menu_display':
+        // For responses with suggestions, show the suggestion count, not total items
+        const allSuggestions = data.suggestions && data.suggestions.length > 0 
+          ? data.suggestions 
+          : data.items || [];
+        
+        // Filter to only valid menu items
+        const validSuggestions = allSuggestions.filter(item => getItemFromSuggestion(item) !== null);
+        const itemsToShow = validSuggestions.slice(0, 3);
+        const totalCount = validSuggestions.length;
+        
         return (
           <div style={responseDataStyle}>
             <div style={itemCountStyle}>
-              {data.items?.length || 0} items found
+              {totalCount} items found
             </div>
-            {data.items?.slice(0, 3).map(item => (
-              <div key={item.id} style={quickItemStyle}>
-                <span style={itemEmojiStyle}>🍽️</span>
-                <div>
-                  <strong>{item.name}</strong> - ${item.price.toFixed(2)}
-                  <div style={itemDescStyle}>{item.description}</div>
+            {itemsToShow.map((item, index) => {
+              const menuItem = getItemFromSuggestion(item);
+              // Only render if the menu item actually exists
+              if (!menuItem) return null;
+              
+              return (
+                <div key={menuItem.id || index} style={quickItemStyle}>
+                  <span style={itemEmojiStyle}>🍽️</span>
+                  <div>
+                    <strong>{menuItem.name}</strong>
+                    {menuItem.price && ` - $${menuItem.price.toFixed(2)}`}
+                    {menuItem.description && <div style={itemDescStyle}>{menuItem.description}</div>}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {data.items?.length > 3 && (
+              );
+            }).filter(item => item !== null)}
+            {totalCount > 3 && (
               <div style={moreItemsStyle}>
-                +{data.items.length - 3} more items available
+                +{totalCount - 3} more items available
               </div>
             )}
           </div>
@@ -144,6 +189,44 @@ const ChatInterface = ({ onUserMessage, aiResponse, isLoading, aiAgent }) => {
             </div>
           </div>
         );
+
+      case 'conversation':
+        // Handle conversation responses that might have suggestions
+        if (data.suggestions && data.suggestions.length > 0) {
+          // Filter to only valid menu items
+          const validSuggestions = data.suggestions.filter(item => getItemFromSuggestion(item) !== null);
+          const itemsToShow = validSuggestions.slice(0, 3);
+          const totalCount = validSuggestions.length;
+          
+          return (
+            <div style={responseDataStyle}>
+              <div style={itemCountStyle}>
+                {totalCount} items found
+              </div>
+              {itemsToShow.map((item, index) => {
+                const menuItem = getItemFromSuggestion(item);
+                // Only render if the menu item actually exists
+                if (!menuItem) return null;
+                
+                return (
+                  <div key={index} style={quickItemStyle}>
+                    <span style={itemEmojiStyle}>🍽️</span>
+                    <div>
+                      <strong>{menuItem.name}</strong>
+                      {menuItem.price && ` - $${menuItem.price.toFixed(2)}`}
+                    </div>
+                  </div>
+                );
+              }).filter(item => item !== null)}
+              {totalCount > 3 && (
+                <div style={moreItemsStyle}>
+                  +{totalCount - 3} more items available
+                </div>
+              )}
+            </div>
+          );
+        }
+        return null;
 
       case 'error':
         return (

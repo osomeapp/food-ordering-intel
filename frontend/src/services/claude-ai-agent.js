@@ -161,7 +161,18 @@ class ClaudeAIAgent {
     
     const categories = Object.keys(menuByCategory);
 
-    return `You are an AI assistant for a food ordering app. You help users browse menus, make recommendations, and manage their cart through natural conversation.
+    return `🚨 CRITICAL: YOU MUST ONLY USE ITEMS FROM THE EXACT MENU BELOW 🚨
+
+📋 COMPLETE MENU DATABASE - THESE ARE THE ONLY ITEMS THAT EXIST:
+${menuSummary}
+
+🚨 END OF MENU DATABASE 🚨
+
+You are an intelligent AI assistant for a food ordering app. You help users discover great food by understanding their requests and making thoughtful recommendations from the available menu.
+
+🧠 THINK SEMANTICALLY: When users ask for "meals with beef", "chicken dishes", "vegetarian options", etc., analyze the menu ingredients and descriptions to find ALL relevant items. Don't just do keyword searches.
+
+⚠️ ABSOLUTE RULE: The menu above contains ALL available items. NO OTHER ITEMS EXIST. You cannot suggest items not in the menu, but you MUST think creatively about what items match user requests.
 
 AVAILABLE TOOLS:
 ${availableTools.map(tool => `- ${tool}`).join('\n')}
@@ -173,14 +184,17 @@ CURRENT CONTEXT:
 - Available categories: ${categories.join(', ')}
 - Previous preferences: ${Array.from(this.userPreferences.entries()).map(([k,v]) => `${k}: ${v}`).join(', ') || 'None'}
 
-COMPLETE MENU BY CATEGORY:
-${menuSummary}
-
-CRITICAL RULES:
-1. ONLY recommend items that exist in the menu above - NEVER make up items like "Lemon Sorbet", "Yogurt Parfait" etc.
-2. When asked for a specific category (e.g., "desserts"), ONLY search within that category
-3. Use the exact item names and IDs from the menu
-4. For "not too sweet" desserts, recommend Fruit Tart (280 cal) or Key Lime Pie (350 cal) which are actually available
+CRITICAL RULES - STRICTLY ENFORCE:
+1. ⚠️  ABSOLUTELY NEVER INVENT OR MAKE UP MENU ITEMS - You must ONLY recommend items that exist in the menu above
+2. ⚠️  NEVER suggest items like "Spicy Chicken Sandwich", "Cajun Shrimp Pasta" unless they EXACTLY match menu item names
+3. ⚠️  When asked for spicy food, ONLY suggest from actual spicy items: Buffalo Chicken Wings, Chicken Tikka Masala, Vegetable Curry, Korean BBQ Bowl
+4. ⚠️  Use EXACT item names from the menu data - do not paraphrase or modify names
+5. 🧠  FOR INGREDIENT/MEAT QUERIES: Use semantic understanding FIRST - don't rely on literal searches that will miss items
+6. 🧠  "MEALS WITH BEEF" = Show ALL beef items including "Ribeye Steak" (ribeye IS beef!) 
+7. 🧠  Think like a chef: ribeye = beef, salmon = fish, chicken tikka = chicken dish
+8. When asked for a specific category (e.g., "desserts"), ONLY search within that category
+9. Use the exact item names and IDs from the menu
+10. Always double-check that your suggestions exist in the provided menu data before responding
 
 RESPONSE FORMAT - ALWAYS RESPOND WITH VALID JSON:
 {
@@ -209,17 +223,33 @@ IMPORTANT RULES:
 7. Keep responses concise but informative
 8. Pay special attention to "no" or "without" constraints (e.g., "no cheese", "without dairy")
 
-Examples:
-- "Show me vegetarian options" → Use menu_get_items with dietary filter
-- "I want desserts that is not too sweet" → Use menu_get_items with category="Desserts", then recommend Fruit Tart or Key Lime Pie from actual menu
-- "Add 2 burgers" → First use menu_search to find "Beef Burger" (main008), then cart_add_item with itemId: "main008"
-- "Add grilled chicken salad" → Search for "Caesar Salad with Chicken" (main010), then cart_add_item with itemId: "main010"
-- "What goes with pasta?" → Recommend actual items like "Shrimp Scampi" (main025) which has pasta
-- "I'm hungry for something spicy" → Use menu_get_items with spicyLevel >= 2
-- "Remove the pizza" → Use cart_remove_item for "Margherita Pizza" (main007)
-- "Something without dairy" → Search for vegan items from actual menu
-- "What do you suggest for old people with diabetes?" → Recommend low-calorie items like "Vegetable Stir Fry" (340 cal) or "Quinoa Bowl" (380 cal)
-- "Show me appetizers" → Use menu_get_items with category="Appetizers"
+🧠 SEMANTIC UNDERSTANDING - ALWAYS THINK FIRST BEFORE USING TOOLS:
+
+FOR MEAT-BASED QUERIES - Don't rely on literal keyword searches, use your knowledge:
+- "Meals with beef" / "Beef dishes" / "Beef options" → {"action": "conversation", "message": "Here are our beef options!", "suggestions": ["Ribeye Steak", "Beef Burger", "Beef Tacos", "Beef Stroganoff", "Korean BBQ Bowl"], "ui_type": "conversation"}
+- "Chicken dishes" / "Chicken meals" → {"action": "conversation", "message": "Here are our chicken options!", "suggestions": ["Buffalo Chicken Wings", "Chicken Parmesan", "Caesar Salad with Chicken", "Chicken Tikka Masala", "Chicken Quesadilla", "Chicken Fajitas", "Chicken Satay"], "ui_type": "conversation"}
+- "Pork dishes" / "Pork meals" → {"action": "conversation", "message": "Here are our pork options!", "suggestions": ["BBQ Ribs", "Pork Tenderloin"], "ui_type": "conversation"}
+- "Seafood" / "Fish dishes" → {"action": "conversation", "message": "Here are our seafood options!", "suggestions": ["Grilled Salmon", "Fish and Chips", "Lobster Tail", "Shrimp Scampi", "Fish Tacos", "Seafood Paella", "Calamari Rings", "Shrimp Cocktail"], "ui_type": "conversation"}
+- "Lamb dishes" → {"action": "conversation", "message": "Here are our lamb options!", "suggestions": ["Lamb Chops"], "ui_type": "conversation"}
+
+KNOW THESE KEY SEMANTIC MAPPINGS:
+🥩 BEEF = Ribeye Steak, Beef Burger, Beef Tacos, Beef Stroganoff, Korean BBQ Bowl
+🐔 CHICKEN = Buffalo Chicken Wings, Chicken Parmesan, Caesar Salad with Chicken, Chicken Tikka Masala, Chicken Quesadilla, Chicken Fajitas, Chicken Satay  
+🐷 PORK = BBQ Ribs, Pork Tenderloin
+🐟 SEAFOOD = Grilled Salmon, Fish and Chips, Lobster Tail, Shrimp Scampi, Fish Tacos, Seafood Paella, Calamari Rings, Shrimp Cocktail
+🐑 LAMB = Lamb Chops
+🦆 DUCK = Duck Confit
+
+FOR CATEGORY QUERIES - Use tools:
+- "Show me desserts" → Use menu_get_items with category="Desserts"
+- "Show me appetizers" → Use menu_get_items with category="Appetizers" 
+- "Show me mains" → Use menu_get_items with category="Mains"
+
+FOR DIETARY QUERIES - Use tools:
+- "Vegetarian options" → Use menu_get_items with dietary filter
+- "Spicy food" → Use menu_get_items and filter by spicyLevel >= 2
+
+ALWAYS PRIORITIZE SEMANTIC UNDERSTANDING OVER LITERAL SEARCHES!
 
 IMPORTANT: When adding items to cart:
 1. You MUST first search for the item using menu_search to get the exact itemId
@@ -244,45 +274,51 @@ DIETARY GUIDELINES:
 
   async parseAndExecuteClaudeResponse(claudeResponse, userInput, currentContext) {
     try {
-      // Parse JSON response with fallback to manual extraction
+      console.log('🤖 === PARSING CLAUDE RESPONSE ===');
+      console.log('🤖 Raw response:', claudeResponse);
+      
+      // Parse JSON response with comprehensive fallback
       let parsedResponse;
+      let fullConversationalMessage = '';
+      
       try {
         parsedResponse = JSON.parse(claudeResponse);
+        fullConversationalMessage = parsedResponse.message || '';
       } catch (e) {
-        // Extract suggestions manually from the response
-        const suggestionsMatch = claudeResponse.match(/"suggestions":\s*\[(.*?)\]/s);
-        const toolMatch = claudeResponse.match(/"tool":\s*"(.*?)"/);
+        console.log('🤖 JSON parsing failed, using advanced parsing...');
         
-        if (suggestionsMatch) {
-          try {
-            const suggestionsArray = JSON.parse('[' + suggestionsMatch[1] + ']');
-            const tool = toolMatch ? toolMatch[1] : 'menu_get_items';
-            
-            // Determine parameters based on context
-            let parameters = {};
-            if (suggestionsArray.some(s => s.toLowerCase().includes('dessert') || s.includes('tart') || s.includes('pie'))) {
-              parameters = { category: 'Desserts' };
-            }
-            
-            parsedResponse = {
-              action: 'tool_call',
-              tool: tool,
-              parameters: parameters,
-              message: 'Here are some options for you:',
-              suggestions: suggestionsArray,
-              ui_type: 'menu_display'
-            };
-          } catch (e2) {
-            parsedResponse = {
-              action: 'conversation',
-              message: claudeResponse,
-              ui_type: 'conversation'
-            };
-          }
+        // Extract conversational text and JSON structure separately
+        const { textBefore, jsonBlock, textAfter, extractedData } = this.extractResponseParts(claudeResponse);
+        
+        console.log('🤖 Extracted parts:');
+        console.log('🤖 - Text before:', textBefore);
+        console.log('🤖 - JSON block:', jsonBlock);
+        console.log('🤖 - Text after:', textAfter);
+        console.log('🤖 - Extracted data:', extractedData);
+        
+        // Combine conversational parts
+        const messageParts = [];
+        if (textBefore) messageParts.push(textBefore);
+        if (extractedData.message) messageParts.push(extractedData.message);
+        if (textAfter) messageParts.push(textAfter);
+        
+        fullConversationalMessage = messageParts.join(' ');
+        
+        // Create parsed response from extracted data
+        if (extractedData.tool && extractedData.suggestions) {
+          parsedResponse = {
+            action: 'tool_call',
+            tool: extractedData.tool,
+            parameters: extractedData.parameters || {},
+            message: fullConversationalMessage,
+            suggestions: extractedData.suggestions,
+            ui_type: extractedData.ui_type || 'menu_display'
+          };
         } else {
           parsedResponse = {
             action: 'conversation',
-            message: claudeResponse,
+            message: fullConversationalMessage || claudeResponse,
+            suggestions: extractedData.suggestions,
             ui_type: 'conversation'
           };
         }
@@ -293,6 +329,28 @@ DIETARY GUIDELINES:
         message: parsedResponse.message,
         suggestions: parsedResponse.suggestions
       };
+
+      // Validate Claude's suggestions against actual menu items
+      if (response.suggestions && response.suggestions.length > 0) {
+        console.log('🔍 VALIDATING SUGGESTIONS:', response.suggestions);
+        const validatedSuggestions = await this.validateSuggestions(response.suggestions, currentContext);
+        console.log('🔍 VALIDATION RESULT:', validatedSuggestions);
+        
+        if (validatedSuggestions.hasInvalidSuggestions) {
+          console.log('⚠️  WARNING: Claude suggested non-existent items:', validatedSuggestions.invalidItems);
+          console.log('⚠️  Removing invalid items, showing only valid suggestions:', validatedSuggestions.validSuggestions);
+          
+          // Only show valid suggestions - completely remove invalid ones
+          if (validatedSuggestions.validSuggestions.length > 0) {
+            response.suggestions = validatedSuggestions.validSuggestions;
+            // Keep Claude's original message
+          } else {
+            // No valid suggestions at all, remove suggestions entirely
+            console.log('⚠️  No valid suggestions found, removing suggestions completely');
+            response.suggestions = null;
+          }
+        }
+      }
 
       // Execute tool calls if specified
       if (parsedResponse.action === 'tool_call' && parsedResponse.tool) {
@@ -393,6 +451,270 @@ DIETARY GUIDELINES:
         suggestions: ['Try being more specific', 'Ask for menu categories', 'Request recommendations']
       };
     }
+  }
+
+  extractResponseParts(claudeResponse) {
+    console.log('🤖 === EXTRACTING RESPONSE PARTS ===');
+    
+    // Find JSON block boundaries
+    const firstBrace = claudeResponse.indexOf('{');
+    const lastBrace = claudeResponse.lastIndexOf('}');
+    
+    let textBefore = '';
+    let jsonBlock = '';
+    let textAfter = '';
+    let extractedData = {};
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+      // Extract text before JSON
+      textBefore = claudeResponse.substring(0, firstBrace).trim();
+      
+      // Extract JSON block
+      jsonBlock = claudeResponse.substring(firstBrace, lastBrace + 1);
+      
+      // Extract text after JSON
+      textAfter = claudeResponse.substring(lastBrace + 1).trim();
+      
+      // Try to parse the JSON block
+      try {
+        extractedData = JSON.parse(jsonBlock);
+        console.log('🤖 Successfully parsed JSON block:', extractedData);
+      } catch (e) {
+        console.log('🤖 Failed to parse JSON block, extracting manually...');
+        // Manual extraction fallback
+        extractedData = this.manuallyExtractFromJSON(jsonBlock);
+      }
+    } else {
+      // No clear JSON structure, treat as plain text
+      textBefore = claudeResponse;
+    }
+    
+    console.log('🤖 Extraction results:');
+    console.log('🤖 - Text before JSON:', textBefore);
+    console.log('🤖 - Text after JSON:', textAfter);
+    console.log('🤖 - Extracted data:', extractedData);
+    
+    return {
+      textBefore,
+      jsonBlock,
+      textAfter,
+      extractedData
+    };
+  }
+  
+  manuallyExtractFromJSON(jsonBlock) {
+    console.log('🤖 Manual extraction from JSON block:', jsonBlock);
+    
+    const extractedData = {};
+    
+    // Extract tool
+    const toolMatch = jsonBlock.match(/"tool":\s*"([^"]+)"/);
+    if (toolMatch) extractedData.tool = toolMatch[1];
+    
+    // Extract message
+    const messageMatch = jsonBlock.match(/"message":\s*"([^"]*(?:\\.[^"]*)*)"/);
+    if (messageMatch) {
+      extractedData.message = messageMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n');
+    }
+    
+    // Extract suggestions
+    const suggestionsMatch = jsonBlock.match(/"suggestions":\s*\[(.*?)\]/s);
+    if (suggestionsMatch) {
+      try {
+        extractedData.suggestions = JSON.parse('[' + suggestionsMatch[1] + ']');
+      } catch (e) {
+        console.log('🤖 Failed to parse suggestions array');
+      }
+    }
+    
+    // Extract ui_type
+    const uiTypeMatch = jsonBlock.match(/"ui_type":\s*"([^"]+)"/);
+    if (uiTypeMatch) extractedData.ui_type = uiTypeMatch[1];
+    
+    // Extract parameters
+    const parametersMatch = jsonBlock.match(/"parameters":\s*(\{[^}]*\})/);
+    if (parametersMatch) {
+      try {
+        extractedData.parameters = JSON.parse(parametersMatch[1]);
+      } catch (e) {
+        console.log('🤖 Failed to parse parameters object');
+      }
+    }
+    
+    console.log('🤖 Manually extracted data:', extractedData);
+    return extractedData;
+  }
+  
+  async validateSuggestions(suggestions, currentContext) {
+    console.log('🔍 === VALIDATING SUGGESTIONS ===');
+    
+    // Get full menu to validate against
+    let menuItems = currentContext.menuItems || [];
+    if (menuItems.length === 0) {
+      try {
+        const fullMenu = await this.mcpClient.callTool('menu_get_items', {});
+        menuItems = fullMenu.items || [];
+      } catch (error) {
+        console.log('🔍 Failed to get menu for validation:', error);
+        return {
+          hasInvalidSuggestions: false,
+          validSuggestions: suggestions,
+          invalidItems: []
+        };
+      }
+    }
+    
+    const validSuggestions = [];
+    const invalidItems = [];
+    
+    for (const suggestion of suggestions) {
+      // Clean the suggestion (remove prices, IDs, and extra info) - same logic as useAIMenu
+      let cleanSuggestion = suggestion.replace(/\s*\([^)]*\)/, ''); // Remove (parentheses)
+      cleanSuggestion = cleanSuggestion.replace(/\s*-\s*\$[\d.]+/, ''); // Remove - $price
+      cleanSuggestion = cleanSuggestion.replace(/\s*\$[\d.]+/, ''); // Remove $price
+      cleanSuggestion = cleanSuggestion.trim();
+      
+      // Try exact match first
+      let match = menuItems.find(item => 
+        item.name.toLowerCase() === cleanSuggestion.toLowerCase()
+      );
+      
+      // Try partial match
+      if (!match) {
+        match = menuItems.find(item => 
+          item.name.toLowerCase().includes(cleanSuggestion.toLowerCase()) ||
+          cleanSuggestion.toLowerCase().includes(item.name.toLowerCase())
+        );
+      }
+      
+      // Try word-by-word match for compound names
+      if (!match) {
+        const suggestionWords = cleanSuggestion.toLowerCase().split(' ');
+        match = menuItems.find(item => {
+          const itemWords = item.name.toLowerCase().split(' ');
+          return suggestionWords.some(word => 
+            itemWords.some(itemWord => itemWord.includes(word) || word.includes(itemWord))
+          );
+        });
+      }
+      
+      if (match) {
+        console.log('🔍 ✅ VALID suggestion:', cleanSuggestion, '→', match.name);
+        validSuggestions.push(match.name);
+      } else {
+        console.log('🔍 ❌ INVALID suggestion:', cleanSuggestion);
+        invalidItems.push(cleanSuggestion);
+      }
+    }
+    
+    return {
+      hasInvalidSuggestions: invalidItems.length > 0,
+      validSuggestions,
+      invalidItems
+    };
+  }
+  
+  async findIntelligentReplacements(invalidItems, currentContext) {
+    console.log('🔄 === FINDING INTELLIGENT REPLACEMENTS ===');
+    console.log('🔄 Invalid items to replace:', invalidItems);
+    
+    // Get full menu to find replacements from
+    let menuItems = currentContext.menuItems || [];
+    if (menuItems.length === 0) {
+      try {
+        const fullMenu = await this.mcpClient.callTool('menu_get_items', {});
+        menuItems = fullMenu.items || [];
+      } catch (error) {
+        console.log('🔄 Failed to get menu for replacements:', error);
+        return [];
+      }
+    }
+    
+    const replacements = [];
+    
+    // Smart replacement mappings for common mistakes (only items that DON'T exist)
+    const replacementMappings = {
+      'lemon sorbet': 'desserts',
+      'panna cotta': 'desserts', 
+      'gelato': 'desserts',
+      'vanilla ice cream': 'desserts',
+      'strawberry ice cream': 'desserts',
+      'spicy chicken sandwich': 'spicy',
+      'cajun shrimp pasta': 'spicy',
+      'buffalo chicken sandwich': 'spicy',
+      'hot wings': 'spicy'
+    };
+    
+    for (const invalidItem of invalidItems) {
+      // Clean the invalid item too (same cleaning logic)
+      let cleanInvalidItem = invalidItem.replace(/\s*\([^)]*\)/, ''); // Remove (parentheses)
+      cleanInvalidItem = cleanInvalidItem.replace(/\s*-\s*\$[\d.]+/, ''); // Remove - $price  
+      cleanInvalidItem = cleanInvalidItem.replace(/\s*\$[\d.]+/, ''); // Remove $price
+      cleanInvalidItem = cleanInvalidItem.trim();
+      
+      const itemLower = cleanInvalidItem.toLowerCase();
+      console.log('🔄 Finding replacement for:', invalidItem, '(cleaned:', cleanInvalidItem, ')');
+      
+      let replacement = null;
+      
+      // Check if we have a specific mapping
+      const mappingKey = Object.keys(replacementMappings).find(key => 
+        itemLower.includes(key) || key.includes(itemLower)
+      );
+      
+      if (mappingKey) {
+        const category = replacementMappings[mappingKey];
+        console.log('🔄 Found mapping:', cleanInvalidItem, '→', category);
+        
+        if (category === 'desserts') {
+          // Find actual desserts
+          const desserts = menuItems.filter(item => 
+            item.category.toLowerCase() === 'desserts'
+          );
+          if (desserts.length > 0) {
+            replacement = desserts[0].name; // Take first dessert
+          }
+        } else if (category === 'spicy') {
+          // Find spicy items
+          const spicyItems = menuItems.filter(item => 
+            item.spicyLevel && item.spicyLevel >= 3
+          );
+          if (spicyItems.length > 0) {
+            replacement = spicyItems[0].name; // Take first spicy item
+          }
+        }
+      }
+      
+      // If no mapping found, try to find similar items by keywords
+      if (!replacement) {
+        const keywords = itemLower.split(' ');
+        
+        for (const keyword of keywords) {
+          if (keyword.length < 3) continue; // Skip short words
+          
+          const match = menuItems.find(item =>
+            item.name.toLowerCase().includes(keyword) ||
+            item.description.toLowerCase().includes(keyword) ||
+            item.category.toLowerCase().includes(keyword)
+          );
+          
+          if (match) {
+            replacement = match.name;
+            break;
+          }
+        }
+      }
+      
+      if (replacement) {
+        console.log('🔄 ✅ Found replacement:', cleanInvalidItem, '→', replacement);
+        replacements.push(replacement);
+      } else {
+        console.log('🔄 ❌ No replacement found for:', cleanInvalidItem);
+      }
+    }
+    
+    console.log('🔄 Final replacements:', replacements);
+    return replacements;
   }
 
   extractAndRememberPreferences(userInput, response) {

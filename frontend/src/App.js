@@ -192,6 +192,7 @@ function App() {
         aiResponse={aiResponse}
         isLoading={isLoading}
         aiAgent={aiAgent}
+        menuItems={menuItems}
       />
     </div>
   );

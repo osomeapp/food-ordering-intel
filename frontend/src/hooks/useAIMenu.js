@@ -60,6 +60,73 @@ const useAIMenu = () => {
     }
   }, [mcpClient]);
 
+  // Stricter matching algorithm for menu items
+  const fuzzyMatchMenuItem = useCallback((itemName, suggestion) => {
+    console.log('🔍 STRICT MATCHING:', itemName, 'vs', suggestion);
+    
+    // Clean the suggestion (remove prices, IDs, and extra info)
+    let cleanSuggestion = suggestion.replace(/\s*\([^)]*\)/, ''); // Remove (parentheses)
+    cleanSuggestion = cleanSuggestion.replace(/\s*-\s*\$[\d.]+/, ''); // Remove - $price
+    cleanSuggestion = cleanSuggestion.replace(/\s*\$[\d.]+/, ''); // Remove $price
+    cleanSuggestion = cleanSuggestion.trim();
+    
+    const itemLower = itemName.toLowerCase();
+    const suggestionLower = cleanSuggestion.toLowerCase();
+    
+    console.log('🔍 CLEANED SUGGESTION:', suggestion, '→', cleanSuggestion);
+    
+    // Exact match (highest priority)
+    if (itemLower === suggestionLower) {
+      console.log('🔍 ✅ EXACT MATCH');
+      return true;
+    }
+    
+    // Full suggestion contained in item name
+    if (itemLower.includes(suggestionLower)) {
+      console.log('🔍 ✅ ITEM CONTAINS SUGGESTION');
+      return true;
+    }
+    
+    // Full item name contained in suggestion (less common but valid)
+    if (suggestionLower.includes(itemLower)) {
+      console.log('🔍 ✅ SUGGESTION CONTAINS ITEM');
+      return true;
+    }
+    
+    // Word-by-word matching with stricter requirements
+    const itemWords = itemLower.split(' ').filter(word => word.length > 3); // Increased minimum length
+    const suggestionWords = suggestionLower.split(' ').filter(word => word.length > 3);
+    
+    // Skip fuzzy matching if either has too few meaningful words
+    if (itemWords.length === 0 || suggestionWords.length === 0) {
+      console.log('🔍 ❌ NO MEANINGFUL WORDS TO MATCH');
+      return false;
+    }
+    
+    // Check for exact word matches only (no partial word matching)
+    let exactWordMatches = 0;
+    for (const itemWord of itemWords) {
+      for (const suggestionWord of suggestionWords) {
+        if (itemWord === suggestionWord) { // Exact word match only
+          exactWordMatches++;
+          break;
+        }
+      }
+    }
+    
+    // Require at least 70% of words to match exactly, and at least 1 match
+    const matchRatio = exactWordMatches / Math.max(itemWords.length, suggestionWords.length);
+    const isMatch = exactWordMatches > 0 && matchRatio >= 0.7;
+    
+    if (isMatch) {
+      console.log('🔍 ✅ STRICT WORD MATCH:', `${exactWordMatches}/${Math.max(itemWords.length, suggestionWords.length)} words matched exactly`);
+    } else {
+      console.log('🔍 ❌ NO MATCH:', `${exactWordMatches}/${Math.max(itemWords.length, suggestionWords.length)} words matched (need 70%+)`);
+    }
+    
+    return isMatch;
+  }, []);
+
   // Process user message through AI agent
   const processUserMessage = useCallback(async (userInput) => {
     if (!userInput.trim()) return;
@@ -86,26 +153,35 @@ const useAIMenu = () => {
         case 'menu_display':
           // If menu_display has suggestions, filter by suggestions instead of showing all items
           if (response.suggestions && response.suggestions.length > 0) {
-            console.log('🔧 FILTERING - Suggestions:', response.suggestions);
-            const itemsToFilter = response.items || menuItems;
-            console.log('🔧 FILTERING - Items to filter from:', itemsToFilter.length);
+            console.log('🔧 FILTERING (MENU_DISPLAY) - Suggestions:', response.suggestions);
+            
+            // Get full menu to filter from if response.items is not provided
+            let itemsToFilter = response.items;
+            if (!itemsToFilter || itemsToFilter.length === 0) {
+              const fullMenu = await mcpClient.callTool('menu_get_items', {});
+              itemsToFilter = fullMenu.items || [];
+            }
+            console.log('🔧 FILTERING (MENU_DISPLAY) - Items to filter from:', itemsToFilter.length);
             
             const filteredItems = itemsToFilter.filter(item => {
               return response.suggestions.some(suggestion => {
-                // Extract item name from suggestion (remove calorie info)
-                const cleanSuggestion = suggestion.replace(/\s*\(\d+.*?\)/, '').trim();
-                const match = item.name.toLowerCase().includes(cleanSuggestion.toLowerCase()) ||
-                             cleanSuggestion.toLowerCase().includes(item.name.toLowerCase()) ||
-                             item.name.toLowerCase() === cleanSuggestion.toLowerCase();
+                const match = fuzzyMatchMenuItem(item.name, suggestion);
                 if (match) {
-                  console.log('🔧 MATCH FOUND:', item.name, '<=>', cleanSuggestion);
+                  console.log('🔧 MATCH FOUND (MENU_DISPLAY):', item.name, '<=>', suggestion);
                 }
                 return match;
               });
             });
             
-            console.log('🔧 FILTERING - Filtered items:', filteredItems.length, filteredItems.map(i => i.name));
-            setMenuItems(filteredItems);
+            console.log('🔧 FILTERING (MENU_DISPLAY) - Filtered items:', filteredItems.length, filteredItems.map(i => i.name));
+            
+            // Fallback: if filtering resulted in no items but we have items from tool call, show those
+            if (filteredItems.length === 0 && response.items && response.items.length > 0) {
+              console.log('🔧 FALLBACK: No matches found, showing tool result items');
+              setMenuItems(response.items);
+            } else {
+              setMenuItems(filteredItems);
+            }
           } else {
             setMenuItems(response.items || []);
           }
@@ -123,16 +199,32 @@ const useAIMenu = () => {
         case 'conversation':
           // If conversation has suggestions, filter menu items to show only suggested items
           if (response.suggestions && response.suggestions.length > 0) {
-            const filteredItems = menuItems.filter(item => {
+            console.log('🔧 FILTERING (CONVERSATION) - Suggestions:', response.suggestions);
+            
+            // Get full menu to filter from (not current filtered state)
+            const fullMenu = await mcpClient.callTool('menu_get_items', {});
+            const itemsToFilter = fullMenu.items || [];
+            console.log('🔧 FILTERING (CONVERSATION) - Full menu items:', itemsToFilter.length);
+            
+            const filteredItems = itemsToFilter.filter(item => {
               return response.suggestions.some(suggestion => {
-                // Extract item name from suggestion (remove calorie info)
-                const cleanSuggestion = suggestion.replace(/\s*\(\d+.*?\)/, '').trim();
-                return item.name.toLowerCase().includes(cleanSuggestion.toLowerCase()) ||
-                       cleanSuggestion.toLowerCase().includes(item.name.toLowerCase()) ||
-                       item.name.toLowerCase() === cleanSuggestion.toLowerCase();
+                const match = fuzzyMatchMenuItem(item.name, suggestion);
+                if (match) {
+                  console.log('🔧 MATCH FOUND (CONVERSATION):', item.name, '<=>', suggestion);
+                }
+                return match;
               });
             });
-            setMenuItems(filteredItems);
+            
+            console.log('🔧 FILTERING (CONVERSATION) - Filtered items:', filteredItems.length, filteredItems.map(i => i.name));
+            
+            // Fallback: if no items matched suggestions, show all menu items matching the original criteria
+            if (filteredItems.length === 0) {
+              console.log('🔧 FALLBACK: No matches found, showing all available items');
+              setMenuItems(itemsToFilter);
+            } else {
+              setMenuItems(filteredItems);
+            }
           }
           break;
         
@@ -150,7 +242,7 @@ const useAIMenu = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [aiAgent, updateCartState]);
+  }, [aiAgent, updateCartState, fuzzyMatchMenuItem]);
 
   // Add item to cart
   const addToCart = useCallback(async (item, quantity = 1, specialInstructions = '') => {
