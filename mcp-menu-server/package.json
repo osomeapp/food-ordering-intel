@@ -1,0 +1,18 @@
+{
+  "name": "mcp-menu-server",
+  "version": "1.0.0",
+  "description": "MCP server for AI-powered food ordering app menu system",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0"
+  },
+  "keywords": ["mcp", "menu", "food-ordering", "ai"],
+  "author": "AI Food Ordering App",
+  "license": "MIT"
+}
